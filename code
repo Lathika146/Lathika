@@ -1,4 +1,3 @@
-# Importing Required Libraries
 import pandas as pd
 import numpy as np
 import re
@@ -9,106 +8,96 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, classification_report
 
-import nltk
-nltk.download('stopwords')
-from nltk.corpus import stopwords
+# Sample dataset
+data = {
+    "title": [
+        "Breaking: Local Man Wins Lottery",
+        "Scientists Discover New Species in Amazon",
+        "Aliens Have Landed in Ohio",
+        "Government Hides UFO Evidence",
+        "Elections Were Rigged, Says Unknown Source",
+        "COVID-19 Vaccine Proven Effective in New Study",
+        "Fake News: Drinking Bleach Cures Virus",
+        "The Earth is Flat, Claims YouTube Star"
+    ],
+    "text": [
+        "A local man has won the lottery and plans to donate to charity.",
+        "Researchers exploring the Amazon have discovered a new insect species.",
+        "Several social media posts claim alien ships landed last night in Ohio.",
+        "Leaked documents suggest the government is hiding evidence of UFOs.",
+        "An anonymous blog post alleges election tampering without proof.",
+        "A recent study shows high efficacy rates in vaccine trials.",
+        "Viral misinformation spreads suggesting bleach cures the virus.",
+        "Controversial YouTube star insists the Earth is flat and NASA lies."
+    ],
+    "label": [1, 1, 0, 0, 0, 1, 0, 0]
+}
+df = pd.DataFrame(data)
 
-import joblib
+# Basic stopword list (manually defined)
+stop_words = set([
+    'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', 'your',
+    'yours', 'yourself', 'yourselves', 'he', 'him', 'his', 'himself', 'she',
+    'her', 'hers', 'herself', 'it', 'its', 'itself', 'they', 'them', 'their',
+    'theirs', 'themselves', 'what', 'which', 'who', 'whom', 'this', 'that',
+    'these', 'those', 'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+    'have', 'has', 'had', 'having', 'do', 'does', 'did', 'doing', 'a', 'an',
+    'the', 'and', 'but', 'if', 'or', 'because', 'as', 'until', 'while', 'of',
+    'at', 'by', 'for', 'with', 'about', 'against', 'between', 'into', 'through',
+    'during', 'before', 'after', 'above', 'below', 'to', 'from', 'up', 'down',
+    'in', 'out', 'on', 'off', 'over', 'under', 'again', 'further', 'then',
+    'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'any',
+    'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no',
+    'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 's',
+    't', 'can', 'will', 'just', 'don', 'should', 'now'
+])
 
-# ----------------------------
-# Step 1: Load Dataset
-# ----------------------------
-# You can download the dataset from Kaggle: https://www.kaggle.com/datasets/clmentbisaillon/fake-and-real-news-dataset
-df_fake = pd.read_csv("Fake.csv")
-df_true = pd.read_csv("True.csv")
-
-# Add labels
-df_fake["label"] = 0  # Fake
-df_true["label"] = 1  # Real
-
-# Combine datasets
-df = pd.concat([df_fake, df_true], axis=0)
-df = df.sample(frac=1).reset_index(drop=True)
-
-# ----------------------------
-# Step 2: Preprocessing Function
-# ----------------------------
+# Preprocessing functions
 def clean_text(text):
-    text = text.lower()  # Lowercase
-    text = re.sub(r'.*?', '', text)  # Remove brackets
-    text = re.sub(r'https?://\S+|www\.\S+', '', text)  # Remove URLs
-    text = re.sub(r'<.*?>+', '', text)  # Remove HTML tags
-    text = re.sub(r'[%s]' % re.escape(string.punctuation), '', text)  # Remove punctuation
-    text = re.sub(r'\n', '', text)  # Remove newlines
-    text = re.sub(r'\w*\d\w*', '', text)  # Remove words with numbers
+    text = text.lower()
+    text = re.sub(r'.*?', '', text)
+    text = re.sub(r'https?://\S+|www\.\S+', '', text)
+    text = re.sub(r'<.*?>+', '', text)
+    text = re.sub(r'[%s]' % re.escape(string.punctuation), '', text)
+    text = re.sub(r'\n', '', text)
+    text = re.sub(r'\w*\d\w*', '', text)
     return text
-
-stop_words = set(stopwords.words('english'))
 
 def remove_stopwords(text):
     return " ".join([word for word in text.split() if word not in stop_words])
 
-# Apply cleaning
-df['text'] = df['title'] + " " + df['text']  # Combine title and content
-df['text'] = df['text'].apply(clean_text)
-df['text'] = df['text'].apply(remove_stopwords)
+# Apply preprocessing
+df['text'] = df['title'] + " " + df['text']
+df['text'] = df['text'].apply(clean_text).apply(remove_stopwords)
 
-# ----------------------------
-# Step 3: Split Data
-# ----------------------------
+# Split data
 X = df['text']
 y = df['label']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-# ----------------------------
-# Step 4: Feature Extraction using TF-IDF
-# ----------------------------
-vectorizer = TfidfVectorizer(max_features=5000)
+# Vectorization
+vectorizer = TfidfVectorizer(max_features=500)
 X_train_vec = vectorizer.fit_transform(X_train)
 X_test_vec = vectorizer.transform(X_test)
 
-# ----------------------------
-# Step 5: Model Training
-# ----------------------------
+# Train model
 model = LogisticRegression()
 model.fit(X_train_vec, y_train)
 
-# Save model and vectorizer
-joblib.dump(model, "fake_news_model.pkl")
-joblib.dump(vectorizer, "tfidf_vectorizer.pkl")
-
-# ----------------------------
-# Step 6: Evaluate Model
-# ----------------------------
+# Evaluate
 y_pred = model.predict(X_test_vec)
 print("Accuracy:", accuracy_score(y_test, y_pred))
-print(classification_report(y_test, y_pred))
+print("Classification Report:\n", classification_report(y_test, y_pred))
 
-# ----------------------------
-# Step 7: Fake News Detection Function
-# ----------------------------
+# Prediction function
 def predict_news(news_text):
-    # Clean and preprocess input
-    cleaned_text = remove_stopwords(clean_text(news_text))
-    
-    # Vectorize
-    transformed_text = vectorizer.transform([cleaned_text])
-    
-    # Predict
-    prediction = model.predict(transformed_text)[0]
-    probabilities = model.predict_proba(transformed_text)[0]
-    
-    # Print result
-    if prediction == 1:
-        print(f"Prediction: **REAL NEWS**")
-        print(f"Confidence: {round(probabilities[1]*100, 2)}%")
-    else:
-        print(f"Prediction: **FAKE NEWS**")
-        print(f"Confidence: {round(probabilities[0]*100, 2)}%")
+    cleaned = remove_stopwords(clean_text(news_text))
+    vec = vectorizer.transform([cleaned])
+    prediction = model.predict(vec)[0]
+    prob = model.predict_proba(vec)[0]
+    print("\nNews:", news_text)
+    print("Prediction:", "REAL" if prediction == 1 else "FAKE")
+    print("Confidence:", round(max(prob) * 100, 2), "%")
 
-# ----------------------------
-# Step 8: Example Prediction
-# ----------------------------
-example_news = "The president announced a new economic policy to boost the national GDP next quarter."
-predict_news(example_news)
+# Example prediction
+predict_news("NASA confirms water found on the moon in recent discovery.")
