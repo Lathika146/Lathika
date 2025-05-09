@@ -1,0 +1,114 @@
+# Importing Required Libraries
+import pandas as pd
+import numpy as np
+import re
+import string
+
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, classification_report
+
+import nltk
+nltk.download('stopwords')
+from nltk.corpus import stopwords
+
+import joblib
+
+# ----------------------------
+# Step 1: Load Dataset
+# ----------------------------
+# You can download the dataset from Kaggle: https://www.kaggle.com/datasets/clmentbisaillon/fake-and-real-news-dataset
+df_fake = pd.read_csv("Fake.csv")
+df_true = pd.read_csv("True.csv")
+
+# Add labels
+df_fake["label"] = 0  # Fake
+df_true["label"] = 1  # Real
+
+# Combine datasets
+df = pd.concat([df_fake, df_true], axis=0)
+df = df.sample(frac=1).reset_index(drop=True)
+
+# ----------------------------
+# Step 2: Preprocessing Function
+# ----------------------------
+def clean_text(text):
+    text = text.lower()  # Lowercase
+    text = re.sub(r'.*?', '', text)  # Remove brackets
+    text = re.sub(r'https?://\S+|www\.\S+', '', text)  # Remove URLs
+    text = re.sub(r'<.*?>+', '', text)  # Remove HTML tags
+    text = re.sub(r'[%s]' % re.escape(string.punctuation), '', text)  # Remove punctuation
+    text = re.sub(r'\n', '', text)  # Remove newlines
+    text = re.sub(r'\w*\d\w*', '', text)  # Remove words with numbers
+    return text
+
+stop_words = set(stopwords.words('english'))
+
+def remove_stopwords(text):
+    return " ".join([word for word in text.split() if word not in stop_words])
+
+# Apply cleaning
+df['text'] = df['title'] + " " + df['text']  # Combine title and content
+df['text'] = df['text'].apply(clean_text)
+df['text'] = df['text'].apply(remove_stopwords)
+
+# ----------------------------
+# Step 3: Split Data
+# ----------------------------
+X = df['text']
+y = df['label']
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# ----------------------------
+# Step 4: Feature Extraction using TF-IDF
+# ----------------------------
+vectorizer = TfidfVectorizer(max_features=5000)
+X_train_vec = vectorizer.fit_transform(X_train)
+X_test_vec = vectorizer.transform(X_test)
+
+# ----------------------------
+# Step 5: Model Training
+# ----------------------------
+model = LogisticRegression()
+model.fit(X_train_vec, y_train)
+
+# Save model and vectorizer
+joblib.dump(model, "fake_news_model.pkl")
+joblib.dump(vectorizer, "tfidf_vectorizer.pkl")
+
+# ----------------------------
+# Step 6: Evaluate Model
+# ----------------------------
+y_pred = model.predict(X_test_vec)
+print("Accuracy:", accuracy_score(y_test, y_pred))
+print(classification_report(y_test, y_pred))
+
+# ----------------------------
+# Step 7: Fake News Detection Function
+# ----------------------------
+def predict_news(news_text):
+    # Clean and preprocess input
+    cleaned_text = remove_stopwords(clean_text(news_text))
+    
+    # Vectorize
+    transformed_text = vectorizer.transform([cleaned_text])
+    
+    # Predict
+    prediction = model.predict(transformed_text)[0]
+    probabilities = model.predict_proba(transformed_text)[0]
+    
+    # Print result
+    if prediction == 1:
+        print(f"Prediction: **REAL NEWS**")
+        print(f"Confidence: {round(probabilities[1]*100, 2)}%")
+    else:
+        print(f"Prediction: **FAKE NEWS**")
+        print(f"Confidence: {round(probabilities[0]*100, 2)}%")
+
+# ----------------------------
+# Step 8: Example Prediction
+# ----------------------------
+example_news = "The president announced a new economic policy to boost the national GDP next quarter."
+predict_news(example_news)
